@@ -1,5 +1,6 @@
 import datetime
 import os
+import os.path as osp
 import pprint
 import time
 import threading
@@ -9,7 +10,6 @@ from os.path import dirname, abspath
 
 from utils.logging import Logger
 from utils.timehelper import time_left, time_str
-from logging import getLevelName, getLogger
 
 
 def run(_run, _config, _log):
