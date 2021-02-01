@@ -15,6 +15,8 @@ from utils.timehelper import time_left, time_str
 from learners import REGISTRY as le_REGISTRY
 from runners import REGISTRY as r_REGISTRY
 from controllers import REGISTRY as mac_REGISTRy
+from components.transforms import OneHot
+from components.episode_buffer import ReplayBuffer
 
 
 def run(_run, _config, _log):
@@ -55,6 +57,53 @@ def run(_run, _config, _log):
 def run_sequential(args, logger):
     # Init runner so we can get env info
     runner = r_REGISTRY[args.runner](args=args, logger=logger)
+
+    # Set up schemes and groups here
+    # {'obs_shape': 80, 'state_shape': 65, 'n_actions': 11, 'n_agents': 5, 'episode_limit': 120}
+    env_info = runner.get_env_info()
+    args.n_agents = env_info["n_agents"]
+    args.n_actions = env_info["n_actions"]
+    args.state_shape = env_info["state_shape"]
+
+    # Default/Base scheme
+    scheme = {
+        "state": {
+            "vshape": env_info["state_shape"]
+        },
+        "obs": {
+            "vshape": env_info["obs_shape"],
+            "group": "agents"
+        },
+        "actions": {
+            "vshape": (1, ),
+            "group": "agents",
+            "dtype": th.long
+        },
+        "avail_actions": {
+            "vshape": (env_info["n_actions"], ),
+            "group": "agents",
+            "dtype": th.int
+        },
+        "reward": {
+            "vshape": (1, )
+        },
+        "terminated": {
+            "vshape": (1, ),
+            "dtype": th.uint8
+        },
+    }
+    groups = {"agents": args.n_agents}
+    preprocess = {"actions": ("actions_onthot", [OneHot(out_dim=args.n_actions)])}
+
+    buffer = ReplayBuffer(scheme,
+                          groups,
+                          args.buffer_size,
+                          env_info["episode_limit"] + 1,
+                          preprocess=preprocess,
+                          device="cpu" if args.buffer_cpu_only else args.device)
+
+    # Setup multiagent controller here
+    mac = mac_REGISTRy[args.mac](buffer.scheme, groups, args)
 
 
 def args_sanity_check(config, _log):
